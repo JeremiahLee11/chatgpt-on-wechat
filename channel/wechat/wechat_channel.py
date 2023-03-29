@@ -20,8 +20,10 @@ from common.tmp_dir import TmpDir
 from config import conf
 from common.time_check import time_checker
 from plugins import *
-
-
+try:
+    from voice.audio_convert import mp3_to_wav
+except Exception as e:
+    pass
 thread_pool = ThreadPoolExecutor(max_workers=8)
 
 
@@ -271,7 +273,6 @@ class WechatChannel(Channel):
                 msg.download(mp3_path)
                 # mp3转wav
                 wav_path = os.path.splitext(mp3_path)[0] + '.wav'
-                from voice.audio_convert import mp3_to_wav
                 mp3_to_wav(mp3_path=mp3_path, wav_path=wav_path)
                 # 语音识别
                 reply = super().build_voice_to_text(wav_path)
@@ -281,7 +282,7 @@ class WechatChannel(Channel):
                 if reply.type != ReplyType.ERROR and reply.type != ReplyType.INFO:
                     content = reply.content  # 语音转文字后，将文字内容作为新的context
                     context.type = ContextType.TEXT
-                    if context["isgroup"]:
+                    if context["isgroup"]: # 群聊
                         # 校验关键字
                         match_prefix = check_prefix(content, conf().get('group_chat_prefix'))
                         match_contain = check_contain(content, conf().get('group_chat_keyword'))
@@ -292,7 +293,11 @@ class WechatChannel(Channel):
                         else:
                             logger.info("[WX]receive voice, checkprefix didn't match")
                             return
-                       
+                    else: # 单聊
+                        match_prefix = check_prefix(content, conf().get('single_chat_prefix'))  
+                        if match_prefix: # 判断如果匹配到自定义前缀，则返回过滤掉前缀+空格后的内容
+                            content = content.replace(match_prefix, '', 1).strip()
+                                               
                     img_match_prefix = check_prefix(content, conf().get('image_create_prefix'))
                     if img_match_prefix:
                         content = content.replace(img_match_prefix, '', 1).strip()
